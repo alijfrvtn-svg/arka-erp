@@ -36,16 +36,16 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       ssl: db.ssl ? { rejectUnauthorized: false } : false,
       poolSize: db.poolSize,
       logging: ['error', 'warn'],
-      connectTimeoutMS: 10000,
+      connectTimeoutMS: db.connectTimeoutMs,
       extra: {
         // Pin the search_path for every pooled connection.
         options: `-c search_path=${db.schema},public`,
         max: db.poolSize,
-        connectionTimeoutMillis: 10000,
+        connectionTimeoutMillis: db.connectTimeoutMs,
       },
     });
 
-    await this.retryConnect(10);
+    await this.retryConnect(db.connectAttempts);
     this.logger.log(`Connected to PostgreSQL ${db.host}:${db.port}/${db.database}`);
   }
 

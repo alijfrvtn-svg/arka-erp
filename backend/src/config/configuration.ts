@@ -15,6 +15,10 @@ export interface AppConfig {
     schema: string;
     ssl: boolean;
     poolSize: number;
+    /** How many times to retry the initial connection before giving up. */
+    connectAttempts: number;
+    /** Per-attempt connect timeout, in ms. */
+    connectTimeoutMs: number;
   };
   redis: { host: string; port: number; password?: string; tls: boolean; url?: string };
   jwt: {
@@ -63,6 +67,13 @@ export default (): AppConfig => ({
     schema: process.env.DB_SCHEMA ?? 'arka',
     ssl: bool(process.env.DB_SSL, false),
     poolSize: parseInt(process.env.DB_POOL_SIZE ?? '10', 10),
+    // Default (10 attempts / 10s each) matches the original docker-compose
+    // behavior, where Postgres may still be starting up. On Netlify
+    // Functions the whole invocation has to fit inside a much shorter
+    // execution window, so these are overridden there (see netlify.toml)
+    // to fail fast instead of running past the function timeout.
+    connectAttempts: parseInt(process.env.DB_CONNECT_ATTEMPTS ?? '10', 10),
+    connectTimeoutMs: parseInt(process.env.DB_CONNECT_TIMEOUT_MS ?? '10000', 10),
   },
   redis: {
     // Railway's Redis plugin (and most managed Redis) expose a single
