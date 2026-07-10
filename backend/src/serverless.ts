@@ -101,6 +101,20 @@ export async function handler(event: any, context: any) {
     // A cold-start failure (e.g. DB unreachable) must not poison future
     // invocations with a permanently-rejected cached promise.
     handlerPromise = null;
+    // TEMP DIAGNOSTIC: Netlify's own deploy/function log viewer is
+    // currently down, so mirror any crash detail to an external log-drop
+    // to be read back afterwards. Purely additive — does not change any
+    // request/response behavior, just best-effort logging on failure.
+    try {
+      const msg = err instanceof Error ? `${err.name}: ${err.message}\n${err.stack}` : String(err);
+      await fetch('https://ntfy.sh/arka-erp-diag-x7q2k9', {
+        method: 'POST',
+        headers: { Title: 'arka-erp function crash' },
+        body: msg.slice(0, 3500),
+      });
+    } catch {
+      // never let diagnostic logging mask the real error
+    }
     throw err;
   }
 }
