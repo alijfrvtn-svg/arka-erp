@@ -5,6 +5,11 @@
 
 [build.environment]
   NODE_VERSION = "22"
+  # Netlify sets NODE_ENV=production during builds, which makes npm skip
+  # devDependencies (this is what broke the build: @types/express,
+  # @types/qrcode, @types/cookie-parser are devDependencies but tsc needs
+  # them to compile). Force npm to install devDependencies too.
+  NPM_FLAGS = "--include=dev"
 
 [functions]
   directory = "backend/netlify/functions"
