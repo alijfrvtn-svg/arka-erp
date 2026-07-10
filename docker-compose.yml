@@ -1,0 +1,112 @@
+# =============================================================================
+#  ARKA ADS STUDIO — ERP & Financial System
+#  Full stack: PostgreSQL 16 · Redis 7 · NestJS API · Vue 3 (nginx)
+#  One command to run everything:   docker compose up --build
+#  App:      http://localhost:8080
+#  API:      http://localhost:3000/api/v1
+#  Login:    ali.jafari@arka.studio  /  Arka@2026!
+# =============================================================================
+name: arka-erp
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-arka}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPER_PASSWORD:-arka_pg_super}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${DB_NAME:-arka}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks: [internal]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks: [internal]
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      # Least-privilege application role provisioned by the DDL (01_*).
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-arka_app}
+      DB_PASSWORD: ${DB_PASSWORD:-change_me_in_production}
+      DB_NAME: ${DB_NAME:-arka}
+      DB_SCHEMA: arka
+      DB_SSL: "false"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-access-secret-change-me}
+      JWT_STEPUP_SECRET: ${JWT_STEPUP_SECRET:-dev-stepup-secret-change-me}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_REFRESH_TTL_DAYS: ${JWT_REFRESH_TTL_DAYS:-7}
+      # Keep false for HTTP LAN/IP access; set true only when serving over HTTPS.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      ENVELOPE_MASTER_KEY_HEX: ${ENVELOPE_MASTER_KEY_HEX:-0000000000000000000000000000000000000000000000000000000000000000}
+      BOOTSTRAP_CEO_EMAIL: ${BOOTSTRAP_CEO_EMAIL:-ali.jafari@arka.studio}
+      BOOTSTRAP_CEO_PASSWORD: ${BOOTSTRAP_CEO_PASSWORD:-Arka@2026!}
+      BOOTSTRAP_CEO_NAME: ${BOOTSTRAP_CEO_NAME:-Ali Jafari}
+      LEGAL_ISSUER: "Ali Jafari"
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    networks: [internal]
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    networks: [internal]
+    restart: unless-stopped
+
+  # Public HTTPS access from anywhere via a Cloudflare Quick Tunnel.
+  # Prints a https://<random>.trycloudflare.com URL in its logs.
+  # Uses 1.1.1.1 as resolver because some ISP/router DNS can't resolve the
+  # argotunnel.com SRV records; reaches the app via the host's published :8080.
+  # (Enable with:  docker compose --profile tunnel up -d cloudflared )
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url http://host.docker.internal:8080
+    dns: ["1.1.1.1", "1.0.0.1"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - frontend
+    restart: unless-stopped
+    profiles: ["tunnel"]
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  internal:
+    driver: bridge

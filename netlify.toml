@@ -1,0 +1,33 @@
+[build]
+  base = "."
+  publish = "frontend/dist"
+  command = "cd backend && npm install && npm run build && cd ../frontend && npm install && npm run build"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[functions]
+  directory = "backend/netlify/functions"
+  node_bundler = "esbuild"
+  # These packages do dynamic/conditional `require()` calls (TypeORM's DB
+  # driver loader) or ship native N-API binaries (argon2, pg optional
+  # native binding) that esbuild's static bundler cannot trace or bundle.
+  # Marking them external makes Netlify include their real node_modules
+  # folder as-is instead of trying to inline them.
+  external_node_modules = ["typeorm", "@node-rs/argon2", "pg", "ioredis"]
+
+# The Vue SPA calls /api/v1/... (see frontend/src/api/client.ts). Route that
+# through to the NestJS Netlify Function; the function itself strips the
+# /.netlify/functions/api prefix back off (see backend/netlify/functions/api.ts)
+# so the app's own /api/v1 routes still match unchanged.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+
+# SPA fallback: any other unmatched path serves index.html so Vue Router
+# (history mode) can handle client-side routing.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
