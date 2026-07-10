@@ -21,14 +21,17 @@ trap send_log EXIT
 
 echo "=== STAGE 1: backend npm install ==="
 cd backend
-npm install
+# --include=dev is passed explicitly because this script calls npm itself;
+# Netlify's NPM_FLAGS/NODE_ENV=production only affects Netlify's own
+# automatic install step, not npm calls made from inside a custom script.
+npm install --include=dev
 
 echo "=== STAGE 2: backend build (tsc) ==="
 npm run build
 
 echo "=== STAGE 3: frontend npm install ==="
 cd ../frontend
-npm install
+npm install --include=dev
 
 echo "=== STAGE 4: frontend build (vite) ==="
 npm run build
