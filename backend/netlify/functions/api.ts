@@ -14,24 +14,32 @@
 // function bundle — and that class of failure happens before any of our
 // own error-handling code ever runs. Wrapping it in a dynamic import lets
 // us catch and report that failure too.
+async function ping(title: string, body: string) {
+  try {
+    await fetch('https://ntfy.sh/arka-erp-diag-x7q2k9', {
+      method: 'POST',
+      headers: { Title: title },
+      body: body.slice(0, 3500),
+    });
+  } catch {
+    // never let diagnostic logging throw
+  }
+}
+
 export async function handler(event: any, context: any) {
+  await ping('arka-erp handler started', `path=${event?.path ?? 'unknown'} method=${event?.httpMethod ?? 'unknown'}`);
   try {
     const mod = await import('../../dist/serverless');
-    return await mod.handler(event, context);
+    await ping('arka-erp module loaded', 'dist/serverless imported ok, calling inner handler');
+    const result = await mod.handler(event, context);
+    await ping('arka-erp handler finished', `statusCode=${result?.statusCode ?? 'unknown'}`);
+    return result;
   } catch (err: any) {
     // TEMP DIAGNOSTIC: Netlify's own deploy/function log viewer is
     // currently down, so mirror any crash detail (including module-load
     // failures) to an external log-drop to be read back afterwards.
-    try {
-      const msg = err instanceof Error ? `${err.name}: ${err.message}\n${err.stack}` : String(err);
-      await fetch('https://ntfy.sh/arka-erp-diag-x7q2k9', {
-        method: 'POST',
-        headers: { Title: 'arka-erp module-load crash' },
-        body: msg.slice(0, 3500),
-      });
-    } catch {
-      // never let diagnostic logging mask the real error
-    }
+    const msg = err instanceof Error ? `${err.name}: ${err.message}\n${err.stack}` : String(err);
+    await ping('arka-erp handler crashed', msg);
     throw err;
   }
 }
